@@ -7,17 +7,27 @@ const sequelize = new Sequelize('project_db', 'root', 'change-me', {
 });
 
 const Employee = sequelize.define('employee', {
-    firstName: {
+    id: {
+        type: Sequelize.INTEGER,
+        autoIncrement: true,
+        primaryKey: true
+    },
+    first_name: {
         type: Sequelize.STRING,
         allowNull: false
     },
-    lastName: {
+    last_name: {
         type: Sequelize.STRING,
         allowNull: false
     }
 });
 
 const Technology = sequelize.define('technology', {
+    id: {
+        type: Sequelize.INTEGER,
+        autoIncrement: true,
+        primaryKey: true
+    },
     name: {
         type: Sequelize.STRING,
         allowNull: false
