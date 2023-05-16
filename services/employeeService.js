@@ -1,20 +1,22 @@
 require('../routes/employee');
-const sqlize = require('../sequelize');
+const {Employee} = require('../models/employee');
+const {Technology} = require('../models/technology')
 
 const getAll = async (req, res) => {
     try {
-        const employees = await sqlize.Employee.findAll({
+        const employees = await Employee.findAll({
             include: [{
-                model: sqlize.Technology,
-                attributes: ['name'],
+                model: Technology,
+                as: 'technologies',
+                attributes: ['id','name'],
                 through: {attributes: []}
             }]
         });
         const employeeList = employees.map(emp => {
             return {
                 id: emp.id,
-                firstName: emp.first_name,
-                lastName: emp.last_name,
+                firstName: emp.firstName,
+                lastName: emp.lastName,
                 technologies: emp.technologies.map(tech => tech.toJSON())
             };
         });
@@ -29,11 +31,12 @@ const getEmployeeById = async (req, res) => {
     try {
         const {id} = req.params;
 
-        const employee = await sqlize.Employee.findByPk(id, {
-            attributes: ["id", "first_name", "last_name"],
+        const employee = await Employee.findByPk(id, {
+            attributes: ["id", "firstName", "lastName"],
             include: [{
-                model: sqlize.Technology,
-                attributes: ['name'],
+                model: Technology,
+                as: 'technologies',
+                attributes: ['id','name'],
                 through: {attributes: []}
             }]
         })
@@ -47,18 +50,18 @@ const getEmployeeById = async (req, res) => {
 
 const addEmployee = async (req, res) => {
     try {
-        const {firstName, lastName, technologyId} = req.body;
+        const {firstName, lastName, technologyIds} = req.body;
         if (!firstName || !lastName) {
             return res.status(400)
                 .json({success: false, msg: 'Please provide first and last name'})
         }
-        const employee = await sqlize.Employee.create({
-            first_name: firstName,
-            last_name: lastName
+        const employee = await Employee.create({
+            firstName: firstName,
+            lastName: lastName
         });
 
-        if (technologyId) {
-            technologyId.forEach(techId => addTechToEmployee(employee, techId));
+        if (technologyIds) {
+            technologyIds.forEach(techId => addTechToEmployee(employee, techId));
         }
         res.status(201)
             .json({success: true, person: `${firstName} ${lastName}`});
@@ -69,33 +72,58 @@ const addEmployee = async (req, res) => {
     }
 };
 
-const addTechToEmployee = (employee, techId) => {
-    sqlize.Technology.findByPk(techId).then(tech => {
-        employee.addTechnology(tech);
-    });
+async function addTechToEmployee (employee, techId) {
+    try {
+        const TechToAdd = await Technology.findByPk(techId);
+        employee.addTechnology(TechToAdd);
+    } catch (error) {
+        console.log(error);
+    }
 }
 
 const updateEmployee = async (req, res) => {
     try {
         const { id } = req.params;
 
-        const employee = await sqlize.Employee.findByPk(id, {
-            include: sqlize.Technology
+        const employee = await Employee.findByPk(id, {
+            include: [{
+                model: Technology,
+                as: 'technologies'
+            }]
         });
 
         if (employee) {
             await employee.update(req.body);
-            const { technologyId } = req.body;
+            const { technologyIds } = req.body;
 
-            if (technologyId) {
-                const technologies = await sqlize.Employee.findAll({where: {id: technologyId}});
+            if (technologyIds) {
+                // const existingTechnologyIds = employee.technologies.map((technology) => technology.id);
+                // const removeTechnologyIds = existingTechnologyIds.filter((techId) => !technologyIds.includes(techId));
+                // console.log(`Remove Tech: ${removeTechnologyIds}`);
+                // const addTechIds = technologyIds.filter((techId) => !existingTechnologyIds.includes(techId));
+                // await sqlize.EmployeeTechnology.destroy({where: {employeeId: id, technologyId: removeTechnologyIds}});
+                // const newEmployeeTechnologies = addTechIds.map((techId) => ({employeeId: id, technologyId: techId}));
+                // await sqlize.EmployeeTechnology.bulkCreate(newEmployeeTechnologies);
+
                 const existingTechnologyIds = employee.technologies.map((technology) => technology.id);
-                const removeTechnologyIds = existingTechnologyIds.filter((techId) => !technologyId.includes(techId));
-                console.log(`Remove Tech: ${removeTechnologyIds}`);
-                const addTechIds = technologyId.filter((techId) => !existingTechnologyIds.includes(techId));
-                await sqlize.EmployeeTechnology.destroy({where: {employeeId: id, technologyId: removeTechnologyIds}});
-                const newEmployeeTechnologies = addTechIds.map((techId) => ({employeeId: id, technologyId: techId}));
-                await sqlize.EmployeeTechnology.bulkCreate(newEmployeeTechnologies);
+
+                const removeTechnologyIds = existingTechnologyIds
+                    .map((id) => String(id))
+                    .filter((techId) => !technologyIds.includes(techId));
+
+                const addTechIds = technologyIds
+                    .filter((techId) => !existingTechnologyIds
+                        .map((id) => String(id))
+                        .includes(techId));
+
+                for (const techId of removeTechnologyIds) {
+                    const techToRemove = await Technology.findByPk(techId);
+                    employee.removeTechnology(techToRemove);
+                }
+
+                for (const techId of addTechIds) {
+                    await addTechToEmployee(employee, techId);
+                }
             }
 
             console.log('Changed fields:', employee.changed());

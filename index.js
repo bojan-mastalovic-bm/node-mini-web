@@ -1,5 +1,6 @@
 const express = require('express');
 const app = express();
+const {getDbInstance} = require('./db');
 
 app.get('/', (req, res) => {
     res.send('Home Page');
@@ -16,5 +17,6 @@ app.get('/project', (req, res) => {
 });
 
 app.listen(3000, () => {
+    getDbInstance(true);
     console.log('Server listening on port 3000');
 });
